@@ -4,10 +4,12 @@ use Mojo::Base -base;
 use Scalar::Util 'looks_like_number';
 use Mojo::Util qw/monkey_patch dumper/;
 
+use constant DEBUG => $ENV{MOJOX_TELEGRAM_DEBUG} || 0;
+
 has ua => sub { Mojo::UserAgent->new };
 
-has api_base  => sub { "https://api.telegram.org" };
-has api_token => sub { die "Attribute 'app_token' must be defined" };
+has api_base  => sub { Mojo::URL->new("https://api.telegram.org") };
+has api_token => sub { die "Attribute 'app_token' is required" };
 
 sub new {
   my $self = shift->SUPER::new(@_);
@@ -87,14 +89,14 @@ sub _api_call {
   my ($self, $method, $params) = @_;
 
   my $api_path = sprintf "/bot%s/%s", $self->api_token, $method;
-  my $api_url  = Mojo::URL->new($self->api_base)->path($api_path);
+  my $api_url  = $self->api_base->clone->path($api_path);
 
   my $headers = {
     'Content-Type' => 'application/json'
   };
 
-  warn "-- Telegram API url => $api_url\n";
-  warn "-- Telegram API params => ", dumper $params;
+  warn "-- Telegram API request params => ", dumper $params
+    if DEBUG;
 
   $self->ua->post_p($api_url, $headers, json => $params)->then(sub {
     my ($tx) = @_;
@@ -104,23 +106,24 @@ sub _api_call {
     if ($res->is_success) {
       my $json = $res->json;
 
-      warn "-- Telegram API response => ", dumper $json;
+      warn "-- Telegram API response json => ", dumper $json
+        if DEBUG;
 
-      die "Telegram API call: malformed response object\n"
+      die "Telegram API call: malformed response json\n"
         unless ref $json eq 'HASH' and defined $json->{ok};
 
-      unless ($json->{ok}) {
-        my @onward = qw/description error_code parameters/;
-        return Mojo::Promise->resolve(undef, @$json{@onward});
-      }
-
-      else {
+      if ($json->{ok}) {
         my $result = $json->{result};
 
         die "Telegram API call: malformed response result\n"
           unless defined $result;
 
         return Mojo::Promise->resolve($result, $json->{description});
+      }
+
+      else {
+        my @onward = qw/description error_code parameters/;
+        return Mojo::Promise->resolve(undef, @$json{@onward});
       }
     }
 
@@ -132,3 +135,25 @@ sub _api_call {
 }
 
 1;
+
+=encoding utf8
+
+=head1 NAME
+
+MojoX::Telegram - JSON-RPC client for Telegram Bot API
+
+=head1 SYNOPSIS
+
+  my $telegram = MojoX::Telegram->new(api_token => '...');
+  $telegram->getMe->then(sub {
+    my ($result, $description, $error_code) = @_;
+
+    if ($result) {
+      warn $result->{username};
+    }
+  })->catch(sub {
+    my ($message) = @_;
+
+    warn "Error: $message";
+  });
+
