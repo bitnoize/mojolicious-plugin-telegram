@@ -1,12 +1,13 @@
 package MojoX::Telegram;
 use Mojo::Base -base;
 
-use Scalar::Util 'looks_like_number';
+use Mojo::UserAgent;
 use Mojo::Util qw/monkey_patch dumper/;
+use Scalar::Util qw/looks_like_number/;
 
 use constant DEBUG => $ENV{MOJOX_TELEGRAM_DEBUG} || 0;
 
-has ua => sub { Mojo::UserAgent->new };
+has ua        => sub { Mojo::UserAgent->new };
 
 has api_base  => sub { Mojo::URL->new("https://api.telegram.org") };
 has api_token => sub { die "Attribute 'app_token' is required" };
@@ -98,7 +99,8 @@ sub _api_call {
   warn "-- Telegram API request params => ", dumper $params
     if DEBUG;
 
-  $self->ua->post_p($api_url, $headers, json => $params)->then(sub {
+  my @post_args = ($api_url, $headers, json => $params);
+  $self->ua->post_p(@post_args)->then(sub {
     my ($tx) = @_;
 
     my $res = $tx->result;
@@ -109,7 +111,7 @@ sub _api_call {
       warn "-- Telegram API response json => ", dumper $json
         if DEBUG;
 
-      die "Telegram API call: malformed response json\n"
+      die "Telegram API call: malformed response JSON\n"
         unless ref $json eq 'HASH' and defined $json->{ok};
 
       if ($json->{ok}) {
