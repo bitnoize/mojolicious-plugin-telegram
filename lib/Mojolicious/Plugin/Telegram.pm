@@ -1,41 +1,38 @@
 package Mojolicious::Plugin::Telegram;
 use Mojo::Base 'Mojolicious::Plugin';
 
-use MojoX::Telegram;
+use MojoX::TBot;
 
-our $VERSION = "0.01";
+our $VERSION = "0.02";
 $VERSION = eval $VERSION;
 
 sub register {
   my ($plugin, $app, $conf) = @_;
 
-  my @conf = qw/api_base api_token/;
-  my %conf = map { $_ => $conf->{$_} } grep { defined $conf->{$_} } @conf;
-
-  $app->attr(telegram => sub { MojoX::Telegram->new(%conf) });
+  $app->attr(tbot => sub { MojoX::TBot->new(%$conf) });
 
   $app->routes->add_shortcut(
-    telegram =>  sub {
+    tbot =>  sub {
       my ($r, $name, %params) = @_;
 
       $params{webhook} //= $name;
 
       $r->post(
-        "/telegram-bot/<webhook>" => {
-          webhook => $params{webhook}
+        "/tbot/<tbot_webhook>" => {
+          tbot_webhook => $params{webhook}
         }
       )->to(
-        format    => 'json',
-        bot_name  => $name,
+        format  => 'json',
 
-        cb => sub {
+        cb  => sub {
           my ($c) = @_;
 
           warn $c->dumper($c->res->json);
         }
-      )->name("telegram_$name");
+      )->name("tbot_$name");
     }
   );
+
 }
 
 1;
@@ -52,15 +49,20 @@ Mojolicious::Plugin::Telegram - Telegram Bot API with Promises
   sub startup {
     my ($app) = @_;
 
-    $app->telegram->getMe->then(sub {
+    $app->tbot->getMe->then(sub {
       my ($result, $description, $error_code) = @_;
 
       if ($result) {
-        warn $result->{username};
+        say $result->{somedata};
+      }
+
+      else {
+        warn "Error: $error_code $description\n";
       }
     })->catch(sub {
       my ($message) = @_;
-      warn "Error: $message";
+
+      warn "Error: $message\n";
     });
   }
 
@@ -76,3 +78,4 @@ You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.
 
 =cut
+
