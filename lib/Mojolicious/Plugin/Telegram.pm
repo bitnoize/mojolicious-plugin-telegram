@@ -1,7 +1,7 @@
 package Mojolicious::Plugin::Telegram;
 use Mojo::Base 'Mojolicious::Plugin';
 
-use MojoX::TBot;
+use MojoX::Telegram;
 
 our $VERSION = "0.02";
 $VERSION = eval $VERSION;
@@ -9,30 +9,38 @@ $VERSION = eval $VERSION;
 sub register {
   my ($plugin, $app, $conf) = @_;
 
-  $app->attr(tbot => sub { MojoX::TBot->new(%$conf) });
+  $conf->{webhook_entry}  //= "https://localhost";
+
+  my $bots_farm = $conf->{bots_farm} //= {};
+
+  for my $bot_id (keys %$bots_farm) {
+    my $config = $bots_farm->{$bot_id};
+
+    $config->{webhook_entry}  //= $conf->{webhook_entry};
+
+    die "Telegram bot '$bot_id' requires 'webhook_route' config\n"
+      unless defined $config->{webhook_route};
+
+    die "Telegram bot '$bot_id' requires 'auth_token' config\n"
+      unless defined $config->{auth_token};
+  }
+
+  $app->attr(telegram => sub {
+    MojoX::Telegram->new(bots_farm => $bots_farm);
+  });
 
   $app->routes->add_shortcut(
-    tbot =>  sub {
-      my ($r, $name, %params) = @_;
+    telegram => sub {
+      my ($r, $bot_id) = @_;
 
-      $params{webhook} //= $name;
+      my $config = $app->telegram->_config($bot_id);
 
-      $r->post(
-        "/tbot/<tbot_webhook>" => {
-          tbot_webhook => $params{webhook}
-        }
-      )->to(
-        format  => 'json',
-
-        cb  => sub {
-          my ($c) = @_;
-
-          warn $c->dumper($c->res->json);
-        }
-      )->name("tbot_$name");
+      $r->post($config->{webhook_route})->to(
+        format      => 'json',
+        bot_id      => $bot_id
+      )->name("telegram_$bot_id");
     }
   );
-
 }
 
 1;
