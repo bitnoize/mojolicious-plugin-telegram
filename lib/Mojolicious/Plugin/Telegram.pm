@@ -3,7 +3,7 @@ use Mojo::Base 'Mojolicious::Plugin';
 
 use MojoX::Telegram;
 
-our $VERSION = "0.02";
+our $VERSION = "0.03";
 $VERSION = eval $VERSION;
 
 sub register {
@@ -36,8 +36,8 @@ sub register {
       my $config = $app->telegram->_config($bot_id);
 
       $r->post($config->{webhook_route})->to(
-        format      => 'json',
-        bot_id      => $bot_id
+        format  => 'json',
+        bot_id  => $bot_id
       )->name("telegram_$bot_id");
     }
   );
@@ -49,7 +49,7 @@ sub register {
 
 =head1 NAME
 
-Mojolicious::Plugin::Telegram - Telegram Bot API with Promises
+Mojolicious::Plugin::Telegram - Telegram Bot API for your Mojolicious app
 
 =head1 SYNOPSIS
 
@@ -57,7 +57,56 @@ Mojolicious::Plugin::Telegram - Telegram Bot API with Promises
   sub startup {
     my ($app) = @_;
 
-    $app->tbot->getMe->then(sub {
+    # Load plugin
+    $app->plugin('Mojolicious::Plugin::Telegram' => {
+      # Default webhook_entry for all bots
+      webhook_entry => 'https://my.test.site.com',
+
+      # First bot
+      test_bot  => {
+        webhook_route => "/telegram/s3cret-one",
+        auth_token    => "000001:AAAAAA"
+      },
+
+      # Second bot
+      another_test => {
+        # Special webhook_entry can be defined too
+        webhook_entry => "https://another.site.test.com",
+        webhook_route => "/telegram/s3cret-two",
+        auth_token    => "000002:BBBBBB"
+      },
+
+      # Third bot
+      another_one => {
+        webhook_route => "/telegram/s3cret-three",
+        auth_token    => "000003:CCCCCC"
+      },
+    });
+
+    # Register webhook for 'test_bot'
+    $app->routes->telegram('test_bot')->to(cb => sub {
+      my $c = shift->render_later;
+
+      my $bot_id = $c->stash('bot_id');
+
+      my $update = $c->req->json;
+
+      return $c->render
+        unless my $message = $update->{message};
+
+      warn $c->dumper($message);
+
+      ...
+
+      $c->render(json => {
+        method  => 'sendMessage',
+        chat_id => $message->{chat}{id},
+        text    => "Some text message!"
+      });
+    });
+
+    # Promise interface
+    $app->telegram->getMe_p('test_bot')->then(sub {
       my ($result, $description, $error_code) = @_;
 
       if ($result) {

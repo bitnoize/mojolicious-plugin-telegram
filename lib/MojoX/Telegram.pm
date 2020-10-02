@@ -21,7 +21,7 @@ sub new {
   return $self;
 }
 
-sub webhook {
+sub webhook_url {
   my ($self, $bot_id) = @_;
 
   my $config = $self->_config($bot_id);
@@ -86,7 +86,7 @@ state @METHODS = qw/
 /;
 
 for my $method (@METHODS) {
-  monkey_patch __PACKAGE__, $method => sub {
+  monkey_patch __PACKAGE__, "${method}_p" => sub {
     shift->_api_call($method, @_)
   };
 }
@@ -171,8 +171,30 @@ MojoX::Telegram - JSON-RPC client for Telegram Bot API
 
 =head1 SYNOPSIS
 
-  my $telegram = MojoX::Telegram->new(api_token => '...');
-  $telegram->getMe->then(sub {
+  my $telegram = MojoX::Telegram->new(
+    bots_farm => {
+      test_bot  => {
+        webhook_entry => "https://my.test.site.com",
+        webhook_route => "/telegram/s3cret-one",
+        auth_token    => "000001:AAAAAA"
+      },
+
+      another_test => {
+        webhook_entry => "https://another.site.test.com",
+        webhook_route => "/telegram/s3cret-two",
+        auth_token    => "000002:BBBBBB"
+      },
+
+      third_bot => {
+        webhook_entry => "https://my.test.site.com",
+        webhook_route => "/telegram/s3cret-three",
+        auth_token    => "000003:CCCCCC"
+      },
+    }
+  );
+
+  # Promise interface
+  $telegram->getMe_p('test_bot')->then(sub {
     my ($result, $description, $error_code) = @_;
 
     if ($result) {
@@ -194,7 +216,7 @@ L<MojoX::Telegram> is a simple JSON-RPC client for Telegram Bot API.
 
 =head1 ATTRIBUTES
 
-L<MojoX::Ethereum> implements the following attributes.
+L<MojoX::Telegram> implements the following attributes.
 
 =head2 ua
 
@@ -203,36 +225,52 @@ L<MojoX::Ethereum> implements the following attributes.
 
 UserAgent object to use for JSON-RPC requests to Telegram Bot API.
 
-=head2 api_base
+=head2 api_entry
 
-  my $api_base  = $telegram->api_base;
-  $telegram     = $telegram->api_base(Mojo::URL->new("api.telegram.org"));
+  my $api_entry = $telegram->api_entry;
+  $telegram     = $telegram->api_entry(Mojo::URL->new("api.telegram.org"));
 
-Base URL object for UserAgent.
+Telegram API URL object for UserAgent.
 
-=head2 api_token
+=head2 bots_farm
 
-  my $api_token = $telegram->api_token;
-  $telegram     = $telegram->api_token("0000000000:XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-0");
+  my $bots_farm = {
+    test_bot => {
+      webhook_entry => "",
+      webhook_route => "",
+      auth_token    => ""
+    },
 
-Token string to authorize with requests.
+    ...
+  }
+
+  my $bots_farm = $telegram->bots_farm;
+  $telegram     = $telegram->bots_farm($bots_farm);
+
+Farm of bots.
 
 =head1 METHODS
 
 L<MojoX::Telegram> inherits all methods from L<Mojo::Base> and implements
 the following new ones.
 
-=head2 setWebhook
+=head2 webhook_url
 
-=head2 deleteWebhook
+  my $url = $telegram->webhook_url($bot_id);
 
-=head2 getWebhookInfo
+Return full webhook URL for specified $bot_id.
 
-=head2 getMe
+=head2 setWebhook_p
 
-=head2 sendMessage
+=head2 deleteWebhook_p
 
-=head2 deleteMessage
+=head2 getWebhookInfo_p
+
+=head2 getMe_p
+
+=head2 sendMessage_p
+
+=head2 deleteMessage_p
 
 
 =head1 DEBUGGING
