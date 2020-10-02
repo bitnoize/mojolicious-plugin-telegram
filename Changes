@@ -1,0 +1,6 @@
+
+0.03 2020-10-02
+  - Added commands 'webhook' and 'bots_farm'.
+  - Simple route webhook shortcut generator.
+  - JSON-RPC client separate from common plugin code.
+
