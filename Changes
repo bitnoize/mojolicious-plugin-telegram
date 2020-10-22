@@ -4,3 +4,6 @@
   - Simple route webhook shortcut generator.
   - JSON-RPC client separate from common plugin code.
 
+0.04 2020-10-21
+  - Use helpers instead of attributes for global objects.
+

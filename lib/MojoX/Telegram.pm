@@ -11,7 +11,7 @@ use constant DEBUG => $ENV{MOJOX_TELEGRAM_DEBUG} || 0;
 has ua        => sub { Mojo::UserAgent->new };
 
 has api_entry => sub { Mojo::URL->new("https://api.telegram.org") };
-has bots_farm => sub { die "There are no any bots in the farm yet" };
+has bots_farm => sub { die "There are no any bots in the farm!" };
 
 sub new {
   my $self = shift->SUPER::new(@_);
@@ -145,15 +145,15 @@ sub _api_call {
 sub _config {
   my ($self, $bot_id) = @_;
 
-  croak "missing bot_id for config"
-    unless defined $bot_id;
+  croak "Telegram missing 'bot_id' on config"
+    unless defined $bot_id and not ref $bot_id;
 
   my $config = $self->bots_farm->{$bot_id};
 
-  die "Telegram bot '$bot_id' config not defined\n"
+  die "Telegram '$bot_id' config undefined\n"
     unless ref $config eq 'HASH';
 
-  die "Telegram bot '$bot_id' config malformed\n"
+  die "Telegram '$bot_id' config malformed\n"
     unless defined $config->{webhook_entry}
       and  defined $config->{webhook_route}
       and  defined $config->{auth_token};
