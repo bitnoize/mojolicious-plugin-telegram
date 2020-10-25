@@ -34,8 +34,7 @@ sub register {
 
       $r->post($config->{webhook_route})->to(
         format  => 'json',
-        bot_id  => $bot_id,
-        action  => 'webhook'
+        bot_id  => $bot_id
       )->name("telegram_$bot_id");
     }
   );
