@@ -9,8 +9,7 @@ has usage       => sub { shift->extract_usage };
 sub run {
   my ($self, @args) = @_;
 
-  my $log       = $self->app->log;
-  my $telegram  = $self->app->telegram;
+  my $app = $self->app;
 
   my $action = 'show';
 
@@ -20,36 +19,35 @@ sub run {
 
   my %actions = (
     show  => sub {
-      $telegram->getWebhookInfo_p($bot_id)->then(sub {
+      $app->telegram->getWebhookInfo_p($bot_id)->then(sub {
         my ($result, $description, $error_code) = @_;
 
-        return Mojo::Promise->reject("Telegram error: $description $error_code")
-          unless $result;
+        return Mojo::Promise->reject("getWebhookInfo: $description $error_code")
+          unless defined $result;
 
-        say "Show webhook => ", dumper $result;
+        say "Show WebHook => ", dumper $result;
       });
     },
 
     setup => sub {
-      my $params = {
-        url => $telegram->webhook_url($bot_id)->to_string,
-        allowed_updates => [ ],
-      };
-
-      $telegram->setWebhook_p($bot_id, $params)->then(sub {
-        my ($result, $description, $error_code) = @_;
-
-        return Mojo::Promise->reject("Telegram error: $description $error_code")
-          unless $result;
-
-        $telegram->getWebhookInfo_p($bot_id);
+      my $url = $app->telegram->webhook_url($bot_id);
+      $app->telegram->setWebhook_p($bot_id => {
+        url             => $url,
+        allowed_updates => [ ]
       })->then(sub {
         my ($result, $description, $error_code) = @_;
 
-        return Mojo::Promise->reject("Telegram error: $description $error_code")
-          unless $result;
+        return Mojo::Promise->reject("setWebhook: $description $error_code")
+          unless defined $result;
 
-        say "Setup webhook => ", dumper $result;
+        $app->telegram->getWebhookInfo_p($bot_id);
+      })->then(sub {
+        my ($result, $description, $error_code) = @_;
+
+        return Mojo::Promise->reject("getWebhookInfo: $description $error_code")
+          unless defined $result;
+
+        say "Setup WebHook => ", dumper $result;
       });
     }
   );
@@ -58,9 +56,7 @@ sub run {
   my $promise = $actions{$action}->();
 
   $promise->catch(sub {
-    my ($error) = @_;
-
-    $log->fatal("Telegram webhook: $error");
+    $app->log->fatal("Telegram WebHook @_");
   })->wait;
 }
 

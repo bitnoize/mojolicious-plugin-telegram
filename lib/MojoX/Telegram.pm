@@ -2,15 +2,16 @@ package MojoX::Telegram;
 use Mojo::Base -base;
 
 use Carp 'croak';
-use Mojo::UserAgent;
-use Mojo::Util qw/monkey_patch dumper/;
 use Scalar::Util qw/looks_like_number/;
+use Mojo::Util qw/monkey_patch dumper/;
+use Mojo::URL;
+use Mojo::UserAgent;
 
 use constant DEBUG => $ENV{MOJOX_TELEGRAM_DEBUG} || 0;
 
 has ua        => sub { Mojo::UserAgent->new };
 
-has api_entry => sub { Mojo::URL->new("https://api.telegram.org") };
+has api_base  => sub { Mojo::URL->new("https://api.telegram.org") };
 has bots_farm => sub { die "There are no any bots in the farm!" };
 
 sub new {
@@ -26,8 +27,15 @@ sub webhook_url {
 
   my $config = $self->_config($bot_id);
 
-  my $url = Mojo::URL->new($config->{webhook_entry});
-  return $url->path($config->{webhook_route})->to_abs;
+  my $url = Mojo::URL->new($config->{webhook_base});
+
+  my $webhook_under = Mojo::Path->new($config->{webhook_under});
+  $webhook_under->leading_slash(1)->trailing_slash(1);
+
+  my $webhook_ident = Mojo::Path->new($config->{webhook_ident});
+  $webhook_ident->leading_slash(0)->trailing_slash(0);
+
+  return $url->path($webhook_under->merge($webhook_ident))->to_string;
 }
 
 state @METHODS = qw/
@@ -97,7 +105,7 @@ sub _api_call {
   my $config = $self->_config($bot_id);
 
   my $api_path = sprintf "/bot%s/%s", $config->{auth_token}, $method;
-  my $api_url  = $self->api_entry->clone->path($api_path);
+  my $api_url  = $self->api_base->clone->path($api_path);
 
   my $headers = {
     'Content-Type' => 'application/json'
@@ -130,14 +138,13 @@ sub _api_call {
       }
 
       else {
-        my @onward = qw/description error_code parameters/;
-        return Mojo::Promise->resolve(undef, @$json{@onward});
+        my @pass = qw/description error_code parameters/;
+        return Mojo::Promise->resolve(undef, @$json{@pass});
       }
     }
 
     else {
-      my $error = sprintf "code %s message %s", $res->code, $res->message;
-      return Mojo::Promise->reject("Telegram API call: connection $error");
+      return Mojo::Promise->resolve(undef, $res->message, $res->code);
     }
   });
 }
@@ -145,17 +152,18 @@ sub _api_call {
 sub _config {
   my ($self, $bot_id) = @_;
 
-  croak "Telegram missing 'bot_id' on config"
+  croak "Telegram config missing 'bot_id'"
     unless defined $bot_id and not ref $bot_id;
 
   my $config = $self->bots_farm->{$bot_id};
 
   die "Telegram '$bot_id' config undefined\n"
-    unless ref $config eq 'HASH';
+    unless defined $config and ref $config eq 'HASH';
 
   die "Telegram '$bot_id' config malformed\n"
-    unless defined $config->{webhook_entry}
-      and  defined $config->{webhook_route}
+    unless defined $config->{webhook_base}
+      and  defined $config->{webhook_under}
+      and  defined $config->{webhook_ident}
       and  defined $config->{auth_token};
 
   return $config;
@@ -174,20 +182,23 @@ MojoX::Telegram - JSON-RPC client for Telegram Bot API
   my $telegram = MojoX::Telegram->new(
     bots_farm => {
       test_bot  => {
-        webhook_entry => "https://my.test.site.com",
-        webhook_route => "/telegram/s3cret-one",
+        webhook_base  => "https://my.test.site.com",
+        webhook_under => "webhook",
+        webhook_ident => "s3cret-one",
         auth_token    => "000001:AAAAAA"
       },
 
       another_test => {
-        webhook_entry => "https://another.site.test.com",
-        webhook_route => "/telegram/s3cret-two",
+        webhook_base  => "https://another.site.test.com",
+        webhook_under => "webhook",
+        webhook_ident => "s3cret-two",
         auth_token    => "000002:BBBBBB"
       },
 
       third_bot => {
-        webhook_entry => "https://my.test.site.com",
-        webhook_route => "/telegram/s3cret-three",
+        webhook_base  => "https://my.test.site.com",
+        webhook_under => "webhook",
+        webhook_ident => "s3cret-three",
         auth_token    => "000003:CCCCCC"
       },
     }
@@ -204,11 +215,7 @@ MojoX::Telegram - JSON-RPC client for Telegram Bot API
     else {
       warn "Error: $error_code $description\n";
     }
-  })->catch(sub {
-    my ($message) = @_;
-
-    warn "Error: $message\n";
-  })->wait;
+  })->catch(sub { warn "Error: @_\n" })->wait;
 
 =head1 DESCRIPTION
 
@@ -225,10 +232,10 @@ L<MojoX::Telegram> implements the following attributes.
 
 UserAgent object to use for JSON-RPC requests to Telegram Bot API.
 
-=head2 api_entry
+=head2 api_base
 
-  my $api_entry = $telegram->api_entry;
-  $telegram     = $telegram->api_entry(Mojo::URL->new("api.telegram.org"));
+  my $api_base  = $telegram->api_base;
+  $telegram     = $telegram->api_base(Mojo::URL->new("https://api.telegram.org"));
 
 Telegram API URL object for UserAgent.
 
@@ -236,8 +243,9 @@ Telegram API URL object for UserAgent.
 
   my $bots_farm = {
     test_bot => {
-      webhook_entry => "",
-      webhook_route => "",
+      webhook_base  => "",
+      webhook_under => "",
+      webhook_ident => "",
       auth_token    => ""
     },
 

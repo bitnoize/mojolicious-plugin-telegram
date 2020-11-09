@@ -3,41 +3,46 @@ use Mojo::Base 'Mojolicious::Plugin';
 
 use MojoX::Telegram;
 
-our $VERSION = "0.04";
+our $VERSION = "0.05";
 $VERSION = eval $VERSION;
 
 sub register {
   my ($plugin, $app, $conf) = @_;
+
+  $conf->{webhook_under} //= "webhook";
 
   my $bots_farm = $conf->{bots_farm} //= {};
 
   for my $bot_id (keys %$bots_farm) {
     my $config = $bots_farm->{$bot_id};
 
-    $config->{webhook_entry} //= $conf->{webhook_entry};
+    $config->{webhook_base}   //= $conf->{webhook_base};
+    $config->{webhook_under}  //= $conf->{webhook_under};
 
-    die "Telegram '$bot_id' malformed configuration\n"
-      unless defined $config->{webhook_entry}
-        and  defined $config->{webhook_route}
-        and  defined $config->{auth_token}
+    die "Telegram '$bot_id' config malformed\n"
+      unless defined $config->{webhook_base}
+        and  defined $config->{webhook_under}
+        and  defined $config->{webhook_ident}
+        and  defined $config->{auth_token};
   }
 
   $app->helper(telegram => sub {
     state $telegram = MojoX::Telegram->new(bots_farm => $bots_farm);
   });
 
-  $app->routes->add_shortcut(
-    telegram => sub {
-      my ($r, $bot_id) = @_;
+  $app->routes->add_shortcut(telegram => sub {
+    my ($r, $bot_id) = @_;
 
-      my $config = $app->telegram->_config($bot_id);
+    my $telegram = $app->telegram->_config($bot_id);
 
-      $r->post($config->{webhook_route})->to(
-        format  => 'json',
-        bot_id  => $bot_id
-      )->name("telegram_$bot_id");
-    }
-  );
+    my $webhook_ident = Mojo::Path->new($telegram->{webhook_ident});
+    $webhook_ident->leading_slash(1)->trailing_slash(0);
+
+    $r->post($webhook_ident)->to(
+      format    => 'json',
+      telegram  => $telegram
+    )->name("telegram_$bot_id");
+  });
 }
 
 1;
@@ -56,27 +61,30 @@ Mojolicious::Plugin::Telegram - Telegram Bot API for your Mojolicious app
 
     # Load plugin
     $app->plugin('Mojolicious::Plugin::Telegram' => {
-      # Default webhook_entry for all bots
-      webhook_entry => 'https://my.test.site.com',
+      # Default webhook_base for all bots
+      webhook_base  => 'https://my.test.site.com',
+
+      # Default webhook_under for all bots
+      webhook_under => 'webhook',
 
       bots_farm => {
         # First bot
-        test_bot  => {
-          webhook_route => "/telegram/s3cret-one",
+        test_bot => {
+          webhook_ident => "s3cret-one",
           auth_token    => "000001:AAAAAA"
         },
 
         # Second bot
         another_test => {
-          # Special webhook_entry can be defined too
-          webhook_entry => "https://another.site.test.com",
-          webhook_route => "/telegram/s3cret-two",
+          # Special webhook_base can be defined too
+          webhook_base  => "https://another.site.test.com",
+          webhook_ident => "s3cret-two",
           auth_token    => "000002:BBBBBB"
         },
 
         # Third bot
         another_one => {
-          webhook_route => "/telegram/s3cret-three",
+          webhook_ident => "s3cret-three",
           auth_token    => "000003:CCCCCC"
         },
       }
