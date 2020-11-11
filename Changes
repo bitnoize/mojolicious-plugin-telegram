@@ -1,6 +1,6 @@
 
 0.03 2020-10-02
-  - Added commands 'webhook' and 'bots_farm'.
+  - Added commands 'webhook' and 'bots'.
   - Simple route webhook shortcut generator.
   - JSON-RPC client separate from common plugin code.
 
@@ -8,7 +8,7 @@
   - Use helpers instead of attributes for global objects.
   - Remove default 'action' stash value.
 
-0.05 2020-11-09
+0.05 2020-11-11
   - Resolve config webhook conflicts.
   - Complete stash config in webhook routes.
   - Not reject promise on HTTP errors while calling api.

@@ -3,7 +3,7 @@ use Mojo::Base 'Mojolicious::Command';
 
 use Mojo::Util qw/getopt dumper/;
 
-has description => "Telegram webhook related commands";
+has description => "Telegram webhook setup";
 has usage       => sub { shift->extract_usage };
 
 sub run {
@@ -11,52 +11,35 @@ sub run {
 
   my $app = $self->app;
 
-  my $action = 'show';
+  my $log = $app->log;
+  my $t   = $app->telegram;
 
   getopt \@args,
-    "i|bot-id=s"  => \my $bot_id,
-    "s|setup"     => sub { $action = 'setup' };
+    "i|bot-id=s"  => \my $bot_id;
 
-  my %actions = (
-    show  => sub {
-      $app->telegram->getWebhookInfo_p($bot_id)->then(sub {
-        my ($result, $description, $error_code) = @_;
+  die $self->usage unless $bot_id;
 
-        return Mojo::Promise->reject("getWebhookInfo: $description $error_code")
-          unless defined $result;
+  my $url = $t->webhook_url($bot_id);
 
-        say "Show WebHook => ", dumper $result;
-      });
-    },
+  $t->setWebhook_p($bot_id => {
+    url             => $url,
+    allowed_updates => [ ]
+  })->then(sub {
+    my ($result, $description, $error_code) = @_;
 
-    setup => sub {
-      my $url = $app->telegram->webhook_url($bot_id);
-      $app->telegram->setWebhook_p($bot_id => {
-        url             => $url,
-        allowed_updates => [ ]
-      })->then(sub {
-        my ($result, $description, $error_code) = @_;
+    return Mojo::Promise->reject("setWebhook: $description $error_code")
+      unless defined $result;
 
-        return Mojo::Promise->reject("setWebhook: $description $error_code")
-          unless defined $result;
+    $t->getWebhookInfo_p($bot_id);
+  })->then(sub {
+    my ($result, $description, $error_code) = @_;
 
-        $app->telegram->getWebhookInfo_p($bot_id);
-      })->then(sub {
-        my ($result, $description, $error_code) = @_;
+    return Mojo::Promise->reject("getWebhookInfo: $description $error_code")
+      unless defined $result;
 
-        return Mojo::Promise->reject("getWebhookInfo: $description $error_code")
-          unless defined $result;
-
-        say "Setup WebHook => ", dumper $result;
-      });
-    }
-  );
-
-  die $self->usage unless $bot_id and $actions{$action};
-  my $promise = $actions{$action}->();
-
-  $promise->catch(sub {
-    $app->log->fatal("Telegram WebHook @_");
+    say "WebHook => ", dumper $result;
+  })->catch(sub {
+    $log->fatal("Telegram WebHook @_");
   })->wait;
 }
 
@@ -66,18 +49,16 @@ sub run {
 
 =head1 NAME
 
-Mojolicious::Command::telegram::webhook - Telegram Bot API webhook control
+Mojolicious::Command::telegram::webhook - Telegram WebHook setup
 
 =head1 SYNOPSIS
 
   Usage: APPLICATION telegram webhook [OPTIONS]
 
     mojo telegram webhook -i test_bot
-    mojo telegram webhook -i test_bot -s
 
   Options:
     -i, --bot-id  Specify bot identifier
-    -s, --setup   Setup values from config
     -h, --help    Show this summary of available options
 
 =cut

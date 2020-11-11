@@ -9,12 +9,12 @@ $VERSION = eval $VERSION;
 sub register {
   my ($plugin, $app, $conf) = @_;
 
-  $conf->{webhook_under} //= "webhook";
+  $conf->{webhook_under}  //= "/";
 
-  my $bots_farm = $conf->{bots_farm} //= {};
+  my $bots = $conf->{bots} //= {};
 
-  for my $bot_id (keys %$bots_farm) {
-    my $config = $bots_farm->{$bot_id};
+  for my $bot_id (keys %$bots) {
+    my $config = $bots->{$bot_id};
 
     $config->{webhook_base}   //= $conf->{webhook_base};
     $config->{webhook_under}  //= $conf->{webhook_under};
@@ -22,25 +22,25 @@ sub register {
     die "Telegram '$bot_id' config malformed\n"
       unless defined $config->{webhook_base}
         and  defined $config->{webhook_under}
-        and  defined $config->{webhook_ident}
+        and  defined $config->{webhook_path}
         and  defined $config->{auth_token};
   }
 
   $app->helper(telegram => sub {
-    state $telegram = MojoX::Telegram->new(bots_farm => $bots_farm);
+    state $telegram = MojoX::Telegram->new(bots => $bots);
   });
 
   $app->routes->add_shortcut(telegram => sub {
     my ($r, $bot_id) = @_;
 
-    my $telegram = $app->telegram->_config($bot_id);
+    my $config = $app->telegram->config($bot_id);
 
-    my $webhook_ident = Mojo::Path->new($telegram->{webhook_ident});
-    $webhook_ident->leading_slash(1)->trailing_slash(0);
+    my $webhook_path = Mojo::Path->new($config->{webhook_path});
+    $webhook_path->leading_slash(1)->trailing_slash(0);
 
-    $r->post($webhook_ident)->to(
-      format    => 'json',
-      telegram  => $telegram
+    $r->post($webhook_path->to_string)->to(
+      format  => 'json',
+      bot_id  => $bot_id
     )->name("telegram_$bot_id");
   });
 }
@@ -64,27 +64,27 @@ Mojolicious::Plugin::Telegram - Telegram Bot API for your Mojolicious app
       # Default webhook_base for all bots
       webhook_base  => 'https://my.test.site.com',
 
-      # Default webhook_under for all bots
-      webhook_under => 'webhook',
-
-      bots_farm => {
+      bots => {
         # First bot
-        test_bot => {
-          webhook_ident => "s3cret-one",
+        'test_bot' => {
+          webhook_under => "webhook",
+          webhook_path  => "s3cret-one",
           auth_token    => "000001:AAAAAA"
         },
 
         # Second bot
-        another_test => {
+        'another_test' => {
           # Special webhook_base can be defined too
           webhook_base  => "https://another.site.test.com",
-          webhook_ident => "s3cret-two",
+          webhook_under => "webhook",
+          webhook_path  => "s3cret-two",
           auth_token    => "000002:BBBBBB"
         },
 
         # Third bot
-        another_one => {
-          webhook_ident => "s3cret-three",
+        'another_one' => {
+          webhook_under => "webhook",
+          webhook_path  => "s3cret-three",
           auth_token    => "000003:CCCCCC"
         },
       }
